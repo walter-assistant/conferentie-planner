@@ -386,6 +386,14 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
       <h3>Ongeplaatst <span class="badge" id="unplacedCount">0</span></h3>
       <div id="unplacedList"></div>
     </div>
+    <div class="sidebar-section">
+      <h3>📋 Versies <span class="badge" id="versionCount">0</span></h3>
+      <div style="display:flex;gap:4px;margin-bottom:8px;">
+        <button class="btn btn-sm btn-success" onclick="saveCurrentVersion()">💾 Versie opslaan</button>
+        <button class="btn btn-sm btn-outline" style="color:var(--text);border-color:var(--border);" onclick="openVersionModal()">📋 Versies</button>
+      </div>
+      <div id="versionListSidebar"></div>
+    </div>
     <div class="sidebar-section stats-panel">
       <h3>📊 Statistieken</h3>
       <div id="statsPanel"></div>
@@ -558,6 +566,32 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
   </div>
 </div>
 
+<!-- ═══════════════════════ MODAL: Versions ═══════════════════════ -->
+<div class="modal-overlay" id="versionModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Versies beheren</h2>
+      <button class="modal-close" onclick="closeModal('versionModalOverlay')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px;padding:12px;background:#e3f2fd;border-radius:4px;font-size:0.85rem;">
+        <strong>💡 Tip:</strong> Versies zijn snapshots van je programma. Gebruik dit om verschillende opstellingen uit te proberen.
+      </div>
+      <div id="versionList"></div>
+      <hr style="margin:16px 0;border:none;border-top:1px solid var(--border);">
+      <h3 style="font-size:0.95rem;margin-bottom:10px;">Nieuwe versie opslaan</h3>
+      <div class="form-group">
+        <label>Versienaam *</label>
+        <input type="text" id="versionName" placeholder="Bijv. Versie 1, Concept ochtendprogramma">
+      </div>
+      <button class="btn btn-success" onclick="saveNewVersion()">💾 Versie opslaan</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" style="color:var(--text)" onclick="closeModal('versionModalOverlay')">Sluiten</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ═══════════════════════════════════════════════════════════════
    STATE
@@ -582,7 +616,8 @@ let state = {
   startHour: 8,
   endHour: 22,
   confName: 'Conferentie',
-  nextId: 1
+  nextId: 1,
+  versions: []  // Added: array of version snapshots
 };
 
 let undoStack = [];
@@ -629,7 +664,8 @@ function loadProject(projectId) {
         startHour: 8,
         endHour: 22,
         confName: 'Nieuwe Conferentie',
-        nextId: 1
+        nextId: 1,
+        versions: []
       };
     }
   } catch(e) {
@@ -641,7 +677,8 @@ function loadProject(projectId) {
       startHour: 8,
       endHour: 22,
       confName: 'Nieuwe Conferentie',
-      nextId: 1
+      nextId: 1,
+      versions: []
     };
   }
   
@@ -652,6 +689,7 @@ function loadProject(projectId) {
     state.activeDate = today;
   }
   if (!state.activeDate) state.activeDate = state.dates[0];
+  if (!state.versions) state.versions = [];  // Ensure versions array exists
   currentProjectId = projectId;
 }
 
@@ -1048,6 +1086,196 @@ function saveSettings() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   VERSION MANAGEMENT
+   ═══════════════════════════════════════════════════════════════ */
+function generateVersionId() {
+  return 'v_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function deepCopy(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
+function saveCurrentVersion() {
+  const name = prompt('Naam voor deze versie:', `Versie ${state.versions.length + 1}`);
+  if (!name || !name.trim()) return;
+  
+  pushUndo('Versie opslaan: ' + name.trim());
+  
+  const version = {
+    id: generateVersionId(),
+    name: name.trim(),
+    savedAt: new Date().toISOString(),
+    sessions: deepCopy(state.sessions)
+  };
+  
+  state.versions.push(version);
+  saveState();
+  renderVersions();
+  showToast(`Versie "${name.trim()}" opgeslagen`);
+}
+
+function saveNewVersion() {
+  const name = document.getElementById('versionName').value.trim();
+  if (!name) { 
+    alert('Versienaam is verplicht.'); 
+    return; 
+  }
+  
+  // Check for duplicate names
+  if (state.versions.find(v => v.name === name)) {
+    if (!confirm(`Er bestaat al een versie met de naam "${name}". Overschrijven?`)) {
+      return;
+    }
+    // Remove existing version with same name
+    state.versions = state.versions.filter(v => v.name !== name);
+  }
+  
+  pushUndo('Versie opslaan: ' + name);
+  
+  const version = {
+    id: generateVersionId(),
+    name: name,
+    savedAt: new Date().toISOString(),
+    sessions: deepCopy(state.sessions)
+  };
+  
+  state.versions.push(version);
+  
+  // Clear input and close modal
+  document.getElementById('versionName').value = '';
+  saveState();
+  renderVersionList();
+  renderVersions();
+  showToast(`Versie "${name}" opgeslagen`);
+}
+
+function loadVersion(versionId) {
+  const version = state.versions.find(v => v.id === versionId);
+  if (!version) return;
+  
+  if (!confirm(`Huidige programma wordt overschreven met versie "${version.name}". Doorgaan?`)) {
+    return;
+  }
+  
+  pushUndo('Versie laden: ' + version.name);
+  
+  // Replace current sessions with version sessions (deep copy)
+  state.sessions = deepCopy(version.sessions);
+  
+  saveState();
+  closeModal('versionModalOverlay');
+  renderAll();
+  showToast(`Versie "${version.name}" geladen`);
+}
+
+function deleteVersion(versionId) {
+  const version = state.versions.find(v => v.id === versionId);
+  if (!version) return;
+  
+  if (!confirm(`Weet je zeker dat je versie "${version.name}" wilt verwijderen?`)) {
+    return;
+  }
+  
+  pushUndo('Versie verwijderen: ' + version.name);
+  
+  state.versions = state.versions.filter(v => v.id !== versionId);
+  saveState();
+  renderVersionList();
+  renderVersions();
+  showToast(`Versie "${version.name}" verwijderd`);
+}
+
+function openVersionModal() {
+  renderVersionList();
+  openModal('versionModalOverlay');
+  setTimeout(() => document.getElementById('versionName').focus(), 100);
+}
+
+function renderVersionList() {
+  const list = document.getElementById('versionList');
+  
+  if (!state.versions.length) {
+    list.innerHTML = '<p style="color:var(--text-light);font-size:0.85rem;">Nog geen versies opgeslagen. Maak hieronder je eerste versie aan.</p>';
+    return;
+  }
+  
+  // Sort versions by date (newest first)
+  const sortedVersions = [...state.versions].sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+  
+  list.innerHTML = sortedVersions.map(v => {
+    const savedDate = new Date(v.savedAt);
+    const formattedDate = savedDate.toLocaleDateString('nl-NL', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    const sessionCount = v.sessions.length;
+    const placedCount = v.sessions.filter(s => s.hallId !== null && s.slotIndex !== null).length;
+    const summary = `${sessionCount} onderdelen (${placedCount} geplaatst)`;
+    
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:12px;margin-bottom:8px;background:#f8f9fa;border-radius:6px;border:1px solid var(--border);">
+        <div style="flex:1;">
+          <div style="font-weight:600;margin-bottom:2px;">${v.name}</div>
+          <div style="font-size:0.8rem;color:var(--text-light);margin-bottom:2px;">${formattedDate}</div>
+          <div style="font-size:0.75rem;color:var(--text-light);">${summary}</div>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-sm btn-primary" onclick="loadVersion('${v.id}')" title="Laden">📂</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteVersion('${v.id}')" title="Verwijderen">🗑</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderVersions() {
+  const container = document.getElementById('versionListSidebar');
+  const versionCount = document.getElementById('versionCount');
+  
+  versionCount.textContent = state.versions.length;
+  
+  if (!state.versions.length) {
+    container.innerHTML = '<p style="color:var(--text-light);font-size:0.8rem;margin-top:4px;">Geen versies opgeslagen.</p>';
+    return;
+  }
+  
+  // Show last 3 versions in sidebar
+  const recentVersions = [...state.versions]
+    .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt))
+    .slice(0, 3);
+  
+  container.innerHTML = recentVersions.map(v => {
+    const savedDate = new Date(v.savedAt);
+    const formattedDate = savedDate.toLocaleDateString('nl-NL', { 
+      day: 'numeric', 
+      month: 'short'
+    });
+    
+    const sessionCount = v.sessions.length;
+    
+    return `
+      <div style="padding:6px 8px;margin-bottom:4px;background:#f0f2f5;border-radius:4px;font-size:0.8rem;cursor:pointer;transition:background 0.15s;"
+           onmouseover="this.style.background='#e3f2fd'"
+           onmouseout="this.style.background='#f0f2f5'"
+           onclick="loadVersion('${v.id}')"
+           title="Klik om te laden">
+        <div style="font-weight:600;margin-bottom:1px;">${v.name}</div>
+        <div style="color:var(--text-light);font-size:0.72rem;">${formattedDate} · ${sessionCount} onderdelen</div>
+      </div>
+    `;
+  }).join('');
+  
+  if (state.versions.length > 3) {
+    container.innerHTML += `<div style="text-align:center;margin-top:4px;"><button class="btn btn-sm btn-outline" style="color:var(--text);border-color:var(--border);font-size:0.75rem;" onclick="openVersionModal()">Alle versies...</button></div>`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
    DATE TABS
    ═══════════════════════════════════════════════════════════════ */
 function addDate() {
@@ -1192,6 +1420,7 @@ function renderAll() {
   renderGrid();
   renderUnplaced();
   renderStats();
+  renderVersions();
 }
 
 function getPlacedSessions(date) {
