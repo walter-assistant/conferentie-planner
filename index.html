@@ -127,7 +127,6 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
   display: grid;
   border: 1px solid var(--border);
   border-radius: 6px;
-  overflow: hidden;
   min-width: 600px;
   background: var(--surface);
 }
@@ -135,6 +134,7 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
   background: #e8eaf6; font-weight: 600; font-size: 0.85rem;
   padding: 10px 8px; text-align: center; border-bottom: 2px solid var(--border);
   border-right: 1px solid var(--border); position: sticky; top: 0; z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
 }
 .grid-header .hall-capacity { font-size: 0.72rem; font-weight: 400; color: var(--text-light); }
 .grid-header.time-header { background: #cfd8dc; min-width: 70px; }
