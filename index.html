@@ -96,16 +96,20 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
   overflow-y: auto; transition: width 0.25s, min-width 0.25s;
 }
 .sidebar.collapsed-sidebar { width: 0; min-width: 0; padding: 0; overflow: hidden; border-right: none; }
-.sidebar-toggle {
-  position: absolute; left: 280px; top: 50%; z-index: 20;
-  transform: translateY(-50%); background: var(--header-bg); color: #fff;
-  border: none; border-radius: 0 6px 6px 0; padding: 8px 4px; cursor: pointer;
-  font-size: 14px; line-height: 1; box-shadow: 2px 0 6px rgba(0,0,0,0.15);
-  transition: left 0.25s;
+.sidebar-collapse-btn {
+  width: 100%; padding: 6px; background: #e8eaf6; border: none; border-bottom: 1px solid var(--border);
+  cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-light);
+  display: flex; align-items: center; justify-content: center; gap: 4px;
 }
-.sidebar-toggle:hover { background: #2c4f7c; }
-.sidebar.collapsed-sidebar ~ .sidebar-toggle { left: 0; }
-.sidebar.collapsed-sidebar ~ .sidebar-toggle .toggle-icon { transform: rotate(180deg); }
+.sidebar-collapse-btn:hover { background: #c5cae9; }
+.sidebar-expand-btn {
+  position: absolute; left: 0; top: 50%; z-index: 20; transform: translateY(-50%);
+  background: var(--header-bg); color: #fff; border: none; border-radius: 0 8px 8px 0;
+  padding: 12px 6px; cursor: pointer; font-size: 16px; box-shadow: 2px 0 8px rgba(0,0,0,0.2);
+  display: none;
+}
+.sidebar-expand-btn:hover { background: #2c4f7c; }
+.sidebar.collapsed-sidebar ~ .sidebar-expand-btn { display: block; }
 .sidebar-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
 .sidebar-section h3 { font-size: 0.9rem; margin-bottom: 8px; display: flex; align-items: center; cursor: pointer; user-select: none; gap: 6px; }
 .sidebar-section h3:hover { opacity: 0.8; }
@@ -393,6 +397,7 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 <div class="main-layout" style="position:relative;">
   <!-- Sidebar -->
   <div class="sidebar" id="sidebarPanel">
+    <button class="sidebar-collapse-btn" onclick="toggleSidebar()">◀ Sidebar inklappen</button>
     <div class="sidebar-section" id="section-zalen">
       <h3 onclick="toggleSection('section-zalen')">🏛️ Zalen <span class="badge" id="hallCount">0</span><span class="collapse-arrow">▼</span></h3>
       <div class="section-content" id="hallListSidebar"></div>
@@ -416,7 +421,7 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
       <div class="section-content" id="statsPanel"></div>
     </div>
   </div>
-  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="Sidebar in/uitklappen"><span class="toggle-icon" style="display:inline-block;transition:transform 0.25s">◀</span></button>
+  <button class="sidebar-expand-btn" id="sidebarExpand" onclick="toggleSidebar()" title="Sidebar tonen">▶</button>
   <!-- Grid -->
   <div class="grid-container" id="gridContainer">
     <div class="empty-state" id="emptyState">
@@ -1830,13 +1835,7 @@ function exportCSV() {
 
 // Sidebar volledig in/uitklappen
 function toggleSidebar() {
-  const sidebar = document.getElementById('sidebarPanel');
-  const btn = document.getElementById('sidebarToggle');
-  const icon = btn.querySelector('.toggle-icon');
-  sidebar.classList.toggle('collapsed-sidebar');
-  const collapsed = sidebar.classList.contains('collapsed-sidebar');
-  icon.textContent = collapsed ? '▶' : '◀';
-  btn.style.left = collapsed ? '0' : '280px';
+  document.getElementById('sidebarPanel').classList.toggle('collapsed-sidebar');
 }
 
 // Sidebar section collapse
