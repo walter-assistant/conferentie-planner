@@ -179,6 +179,7 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 .session-block:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.35); z-index: 6; }
 .session-block.dragging { opacity: 0.4; }
 .session-block .sb-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-block .sb-time { font-size: 0.68rem; opacity: 0.85; font-weight: 500; }
 .session-block .sb-speaker { font-size: 0.7rem; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-block .sb-attendees { font-size: 0.65rem; opacity: 0.8; }
 .session-block .capacity-warning {
@@ -925,8 +926,13 @@ function renderGrid() {
     const hall = state.halls.find(h => h.id === s.hallId);
     const overCap = hall && hall.capacity > 0 && s.attendees > hall.capacity;
 
+    const timeStart = s.slotIndex !== null ? slotToTime(s.slotIndex) : '';
+    const timeEnd = s.slotIndex !== null ? slotToTime(s.slotIndex + s.duration) : '';
+    const timeStr = timeStart && timeEnd ? `${timeStart} - ${timeEnd}` : '';
+
     block.innerHTML = `
       <div class="sb-title">${s.name}</div>
+      ${timeStr ? `<div class="sb-time">${timeStr}</div>` : ''}
       ${s.speaker ? `<div class="sb-speaker">👤 ${s.speaker}</div>` : ''}
       ${s.attendees ? `<div class="sb-attendees">👥 ${s.attendees}</div>` : ''}
       ${overCap ? '<div class="capacity-warning" title="Meer deelnemers dan zaalcapaciteit!">⚠️</div>' : ''}
