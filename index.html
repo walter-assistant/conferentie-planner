@@ -115,6 +115,28 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 .unplaced-item[draggable="true"] { cursor: grab; }
 .unplaced-item.dragging { opacity: 0.4; }
 
+/* Hall list in sidebar */
+.hall-list-item {
+  padding: 8px 10px; margin-bottom: 6px; border-radius: 4px;
+  background: #f8f9fa; border: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.85rem; cursor: grab;
+  transition: all 0.15s;
+}
+.hall-list-item:hover { background: #e3f2fd; border-color: #2196f3; transform: translateX(2px); }
+.hall-list-item.dragging { opacity: 0.4; }
+.hall-list-item .drag-handle {
+  color: var(--text-light); font-size: 1rem; cursor: grab;
+}
+.hall-list-item .hall-info { flex: 1; }
+.hall-list-item .hall-name { font-weight: 600; }
+.hall-list-item .hall-details { font-size: 0.75rem; color: var(--text-light); }
+.hall-drop-indicator {
+  height: 2px; background: #2196f3; margin: 2px 0;
+  opacity: 0; transition: opacity 0.2s;
+}
+.hall-drop-indicator.active { opacity: 1; }
+
 /* Grid container */
 .grid-container {
   flex: 1; overflow: auto; padding: 0 16px 16px 16px; position: relative;
@@ -307,9 +329,19 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 </head>
 <body>
 
+<!-- ═══════════════════════ PROJECT BAR ═══════════════════════ -->
+<div style="background:#f5f7fa;border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">
+  <span style="color:var(--text-light);font-weight:600;">Project:</span>
+  <select id="projectSelect" style="padding:4px 8px;border:1px solid var(--border);border-radius:3px;font-size:0.85rem;min-width:180px;" onchange="switchProject()">
+  </select>
+  <button class="btn btn-sm btn-outline" style="color:var(--text);border-color:var(--border);" onclick="newProject()">+ Nieuw</button>
+  <button class="btn btn-sm btn-danger" onclick="deleteProject()">🗑️ Verwijder</button>
+  <span style="margin-left:auto;color:var(--text-light);font-size:0.8rem;" id="projectStatus"></span>
+</div>
+
 <!-- ═══════════════════════ HEADER ═══════════════════════ -->
 <div class="header">
-  <h1>📅 Conferentie Planner</h1>
+  <h1 style="cursor:pointer;" onclick="editConferenceName()" title="Klik om te bewerken">📅 <span id="headerTitle">Conferentie Planner</span></h1>
   <div class="header-actions">
     <button class="btn btn-outline" onclick="openHallModal()">🏛 Zalen</button>
     <button class="btn btn-outline" onclick="openSessionModal()">➕ Programma</button>
@@ -343,6 +375,10 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 <div class="main-layout">
   <!-- Sidebar -->
   <div class="sidebar">
+    <div class="sidebar-section">
+      <h3>🏛️ Zalen <span class="badge" id="hallCount">0</span></h3>
+      <div id="hallListSidebar"></div>
+    </div>
     <div class="sidebar-section">
       <h3>Ongeplaatst <span class="badge" id="unplacedCount">0</span></h3>
       <div id="unplacedList"></div>
@@ -548,27 +584,210 @@ let state = {
 
 let undoStack = [];
 const MAX_UNDO = 20;
+let currentProjectId = 'default';
 
 /* ═══════════════════════════════════════════════════════════════
-   PERSISTENCE
+   PROJECT MANAGEMENT
    ═══════════════════════════════════════════════════════════════ */
-function saveState() {
-  try { localStorage.setItem('confPlanner', JSON.stringify(state)); } catch(e) {}
-}
-function loadState() {
+function getProjectIndex() {
   try {
-    const d = localStorage.getItem('confPlanner');
-    if (d) {
-      const parsed = JSON.parse(d);
-      state = { ...state, ...parsed };
-    }
+    const index = localStorage.getItem('conf_index');
+    return index ? JSON.parse(index) : [{ id: 'default', name: 'Mijn Conferentie' }];
+  } catch(e) {
+    return [{ id: 'default', name: 'Mijn Conferentie' }];
+  }
+}
+
+function saveProjectIndex(index) {
+  try {
+    localStorage.setItem('conf_index', JSON.stringify(index));
   } catch(e) {}
+}
+
+function saveCurrentProject() {
+  try {
+    localStorage.setItem(`conf_${currentProjectId}`, JSON.stringify(state));
+  } catch(e) {}
+}
+
+function loadProject(projectId) {
+  try {
+    const data = localStorage.getItem(`conf_${projectId}`);
+    if (data) {
+      const parsed = JSON.parse(data);
+      state = { ...state, ...parsed };
+    } else {
+      // New project - reset to defaults
+      state = {
+        halls: [],
+        sessions: [],
+        dates: [new Date().toISOString().split('T')[0]],
+        activeDate: new Date().toISOString().split('T')[0],
+        startHour: 8,
+        endHour: 22,
+        confName: 'Nieuwe Conferentie',
+        nextId: 1
+      };
+    }
+  } catch(e) {
+    state = {
+      halls: [],
+      sessions: [],
+      dates: [new Date().toISOString().split('T')[0]],
+      activeDate: new Date().toISOString().split('T')[0],
+      startHour: 8,
+      endHour: 22,
+      confName: 'Nieuwe Conferentie',
+      nextId: 1
+    };
+  }
+  
+  // Ensure minimum required state
   if (!state.dates.length) {
     const today = new Date().toISOString().split('T')[0];
     state.dates.push(today);
     state.activeDate = today;
   }
   if (!state.activeDate) state.activeDate = state.dates[0];
+  currentProjectId = projectId;
+}
+
+function switchProject() {
+  const select = document.getElementById('projectSelect');
+  const newProjectId = select.value;
+  
+  if (newProjectId === currentProjectId) return;
+  
+  // Save current project
+  saveCurrentProject();
+  
+  // Load new project
+  loadProject(newProjectId);
+  
+  // Update UI
+  renderAll();
+  updateProjectUI();
+}
+
+function newProject() {
+  const name = prompt('Naam van de nieuwe conferentie:', 'Nieuwe Conferentie');
+  if (!name || !name.trim()) return;
+  
+  // Save current project first
+  saveCurrentProject();
+  
+  // Generate new project ID
+  const newId = 'proj_' + Date.now();
+  
+  // Add to index
+  const index = getProjectIndex();
+  index.push({ id: newId, name: name.trim() });
+  saveProjectIndex(index);
+  
+  // Switch to new project
+  loadProject(newId);
+  state.confName = name.trim();
+  
+  // Update UI
+  renderProjectSelect();
+  document.getElementById('projectSelect').value = newId;
+  renderAll();
+  updateProjectUI();
+  
+  showToast(`Nieuw project "${name}" aangemaakt`);
+}
+
+function deleteProject() {
+  const index = getProjectIndex();
+  if (index.length <= 1) {
+    alert('Je kunt niet het laatste project verwijderen.');
+    return;
+  }
+  
+  const currentProject = index.find(p => p.id === currentProjectId);
+  const projectName = currentProject ? currentProject.name : 'dit project';
+  
+  if (!confirm(`Weet je zeker dat je "${projectName}" wilt verwijderen? Alle data gaat verloren.`)) {
+    return;
+  }
+  
+  // Remove from index
+  const newIndex = index.filter(p => p.id !== currentProjectId);
+  saveProjectIndex(newIndex);
+  
+  // Delete project data
+  try {
+    localStorage.removeItem(`conf_${currentProjectId}`);
+  } catch(e) {}
+  
+  // Switch to first available project
+  loadProject(newIndex[0].id);
+  
+  // Update UI
+  renderProjectSelect();
+  document.getElementById('projectSelect').value = currentProjectId;
+  renderAll();
+  updateProjectUI();
+  
+  showToast(`Project "${projectName}" verwijderd`);
+}
+
+function renderProjectSelect() {
+  const select = document.getElementById('projectSelect');
+  const index = getProjectIndex();
+  
+  select.innerHTML = index.map(p => 
+    `<option value="${p.id}" ${p.id === currentProjectId ? 'selected' : ''}>${p.name}</option>`
+  ).join('');
+}
+
+function updateProjectUI() {
+  document.getElementById('headerTitle').textContent = state.confName;
+  document.getElementById('projectStatus').textContent = `${state.sessions.length} onderdelen, ${state.halls.length} zalen`;
+}
+
+function editConferenceName() {
+  const newName = prompt('Conferentienaam:', state.confName);
+  if (newName === null || !newName.trim()) return;
+  
+  state.confName = newName.trim();
+  
+  // Update project index
+  const index = getProjectIndex();
+  const project = index.find(p => p.id === currentProjectId);
+  if (project) {
+    project.name = newName.trim();
+    saveProjectIndex(index);
+  }
+  
+  saveCurrentProject();
+  renderProjectSelect();
+  updateProjectUI();
+  showToast('Conferentienaam bijgewerkt');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PERSISTENCE (Updated for projects)
+   ═══════════════════════════════════════════════════════════════ */
+function saveState() {
+  saveCurrentProject();
+}
+
+function loadState() {
+  // Check for legacy data and migrate
+  try {
+    const legacyData = localStorage.getItem('confPlanner');
+    if (legacyData && !localStorage.getItem('conf_index')) {
+      // Migrate legacy data
+      localStorage.setItem('conf_default', legacyData);
+      const index = [{ id: 'default', name: 'Mijn Conferentie' }];
+      saveProjectIndex(index);
+      localStorage.removeItem('confPlanner');
+    }
+  } catch(e) {}
+  
+  // Load current project
+  loadProject(currentProjectId);
 }
 
 function pushUndo(description) {
@@ -735,6 +954,7 @@ function addHall() {
   saveState();
   renderHallList();
   renderAll();
+  updateProjectUI();
 }
 
 function editHall(id) {
@@ -750,6 +970,7 @@ function editHall(id) {
   saveState();
   renderHallList();
   renderAll();
+  updateProjectUI();
 }
 
 function removeHall(id) {
@@ -764,6 +985,7 @@ function removeHall(id) {
   saveState();
   renderHallList();
   renderAll();
+  updateProjectUI();
 }
 
 /* Settings modal */
@@ -835,10 +1057,107 @@ function renderDateTabs() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   HALL REORDERING
+   ═══════════════════════════════════════════════════════════════ */
+let draggedHallId = null;
+
+function renderHallListSidebar() {
+  const container = document.getElementById('hallListSidebar');
+  document.getElementById('hallCount').textContent = state.halls.length;
+  
+  if (!state.halls.length) {
+    container.innerHTML = '<p style="color:var(--text-light);font-size:0.8rem;">Geen zalen. Klik op 🏛 Zalen om toe te voegen.</p>';
+    return;
+  }
+  
+  let html = '';
+  state.halls.forEach((hall, index) => {
+    html += `<div class="hall-drop-indicator" data-index="${index}"></div>`;
+    html += `
+      <div class="hall-list-item" draggable="true" data-hall-id="${hall.id}">
+        <div class="drag-handle">≡</div>
+        <div class="hall-info">
+          <div class="hall-name">${hall.name}</div>
+          <div class="hall-details">${hall.capacity ? hall.capacity + ' pers.' : 'Capaciteit onbekend'}${hall.location ? ' · ' + hall.location : ''}</div>
+        </div>
+      </div>
+    `;
+  });
+  html += `<div class="hall-drop-indicator" data-index="${state.halls.length}"></div>`;
+  
+  container.innerHTML = html;
+  
+  // Add drag event listeners
+  container.querySelectorAll('.hall-list-item').forEach(item => {
+    item.addEventListener('dragstart', onHallDragStart);
+    item.addEventListener('dragend', onHallDragEnd);
+  });
+  
+  // Add drop indicators
+  container.querySelectorAll('.hall-drop-indicator').forEach(indicator => {
+    indicator.addEventListener('dragover', onHallDropIndicatorDragOver);
+    indicator.addEventListener('drop', onHallDrop);
+  });
+}
+
+function onHallDragStart(e) {
+  draggedHallId = parseInt(e.target.dataset.hallId);
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', draggedHallId);
+}
+
+function onHallDragEnd(e) {
+  e.target.classList.remove('dragging');
+  document.querySelectorAll('.hall-drop-indicator').forEach(el => el.classList.remove('active'));
+  draggedHallId = null;
+}
+
+function onHallDropIndicatorDragOver(e) {
+  if (draggedHallId === null) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  
+  // Remove active class from all indicators
+  document.querySelectorAll('.hall-drop-indicator').forEach(el => el.classList.remove('active'));
+  // Add active class to current indicator
+  e.target.classList.add('active');
+}
+
+function onHallDrop(e) {
+  e.preventDefault();
+  if (draggedHallId === null) return;
+  
+  const dropIndex = parseInt(e.target.dataset.index);
+  const draggedHall = state.halls.find(h => h.id === draggedHallId);
+  const currentIndex = state.halls.findIndex(h => h.id === draggedHallId);
+  
+  if (currentIndex === dropIndex || currentIndex === dropIndex - 1) {
+    // No change needed
+    return;
+  }
+  
+  pushUndo('Zaal volgorde wijzigen: ' + draggedHall.name);
+  
+  // Remove hall from current position
+  state.halls.splice(currentIndex, 1);
+  
+  // Insert at new position (adjust for removed item)
+  const insertIndex = dropIndex > currentIndex ? dropIndex - 1 : dropIndex;
+  state.halls.splice(insertIndex, 0, draggedHall);
+  
+  saveState();
+  renderAll();
+  
+  showToast(`Zaal "${draggedHall.name}" verplaatst`);
+}
+
+/* ═══════════════════════════════════════════════════════════════
    RENDERING
    ═══════════════════════════════════════════════════════════════ */
 function renderAll() {
   renderDateTabs();
+  renderHallListSidebar();
   renderGrid();
   renderUnplaced();
   renderStats();
@@ -1575,6 +1894,8 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
    INIT
    ═══════════════════════════════════════════════════════════════ */
 loadState();
+renderProjectSelect();
+updateProjectUI();
 renderAll();
 
 /* Auto-save on changes */
