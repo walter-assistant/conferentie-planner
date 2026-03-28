@@ -319,9 +319,17 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
     <button class="btn btn-outline" onclick="exportJSON()">💾 JSON</button>
     <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">📂 Import JSON</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
-    <button class="btn btn-outline" onclick="document.getElementById('importCSVFile').click()">📂 Import CSV</button>
-    <input type="file" id="importCSVFile" accept=".csv,.txt" style="display:none" onchange="importCSV(event)">
+    <button class="btn btn-outline" onclick="toggleCSVDrop()">📂 Import CSV</button>
+    <input type="file" id="importCSVFile" accept=".csv,.txt,.xlsx" style="display:none" onchange="importCSVFromInput(event)">
   </div>
+</div>
+
+<!-- ═══════════════════════ CSV DROP ZONE ═══════════════════════ -->
+<div id="csvDropZone" style="display:none;margin:0 16px;padding:24px;border:3px dashed #1e3a5f;border-radius:12px;background:#e3f2fd;text-align:center;cursor:pointer;transition:all 0.2s">
+  <div style="font-size:24px;margin-bottom:8px">📂</div>
+  <div style="font-size:16px;font-weight:700;color:#1e3a5f">Sleep je CSV bestand hierheen</div>
+  <div style="font-size:13px;color:#666;margin-top:4px">Of klik om een bestand te selecteren</div>
+  <div id="csvDropStatus" style="margin-top:8px;font-size:13px;display:none"></div>
 </div>
 
 <!-- ═══════════════════════ TOOLBAR ═══════════════════════ -->
@@ -1223,13 +1231,50 @@ function exportCSV() {
   showToast('CSV geëxporteerd');
 }
 
-function importCSV(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+// CSV Drop Zone
+function toggleCSVDrop() {
+  const zone = document.getElementById('csvDropZone');
+  zone.style.display = zone.style.display === 'none' ? 'block' : 'none';
+}
+
+// Init drop zone events
+document.addEventListener('DOMContentLoaded', function() {
+  const zone = document.getElementById('csvDropZone');
+  const fileInput = document.getElementById('importCSVFile');
+  
+  zone.addEventListener('click', function() { fileInput.click(); });
+  zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.style.background='#bbdefb'; zone.style.borderColor='#0d47a1'; });
+  zone.addEventListener('dragleave', function(e) { e.preventDefault(); zone.style.background='#e3f2fd'; zone.style.borderColor='#1e3a5f'; });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    zone.style.background='#e3f2fd'; zone.style.borderColor='#1e3a5f';
+    if (e.dataTransfer.files.length > 0) processCSVFile(e.dataTransfer.files[0]);
+  });
+  
+  fileInput.addEventListener('change', function() {
+    if (fileInput.files.length > 0) processCSVFile(fileInput.files[0]);
+    fileInput.value = '';
+  });
+});
+
+function importCSVFromInput(event) {
+  if (event.target.files.length > 0) processCSVFile(event.target.files[0]);
+  event.target.value = '';
+}
+
+function processCSVFile(file) {
+  const statusEl = document.getElementById('csvDropStatus');
+  statusEl.style.display = 'block';
+  statusEl.style.color = '#1e3a5f';
+  statusEl.textContent = 'Laden: ' + file.name + '...';
+  
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = function(e) { importCSVData(e.target.result, file.name, statusEl); };
+  reader.readAsText(file);
+}
+
+function importCSVData(text, fileName, statusEl) {
     try {
-      const text = e.target.result;
       const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
       if (lines.length < 2) { showToast('CSV is leeg', 'error'); return; }
 
@@ -1354,13 +1399,13 @@ function importCSV(event) {
       saveState();
       state.activeDate = state.dates[0] || null;
       renderAll();
+      if (statusEl) { statusEl.style.color = '#2e7d32'; statusEl.textContent = '✅ ' + imported + ' sessies geïmporteerd uit ' + fileName; }
       showToast(imported + ' sessies geïmporteerd uit CSV');
+      setTimeout(function() { document.getElementById('csvDropZone').style.display = 'none'; }, 2000);
     } catch(err) {
+      if (statusEl) { statusEl.style.color = '#c62828'; statusEl.textContent = '❌ Fout: ' + err.message; }
       showToast('Fout bij CSV import: ' + err.message, 'error');
     }
-  };
-  reader.readAsText(file);
-  event.target.value = '';
 }
 
 // Helper: parse CSV line respecting quoted fields
