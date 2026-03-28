@@ -117,16 +117,28 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 
 /* Grid container */
 .grid-container {
-  flex: 1; overflow: auto; padding: 16px; position: relative;
+  flex: 1; overflow: auto; padding: 0 16px 16px 16px; position: relative;
 }
 
 /* ═══════════════════════════════════════════════════════════════
    SCHEDULE GRID
    ═══════════════════════════════════════════════════════════════ */
+.grid-header-row {
+  display: grid;
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  min-width: 600px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: var(--surface);
+}
 .schedule-grid {
   display: grid;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
   min-width: 600px;
   background: var(--surface);
 }
@@ -335,6 +347,7 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
       <div class="empty-icon">🏛</div>
       <p>Voeg eerst zalen toe via de knop <strong>🏛 Zalen</strong> hierboven.</p>
     </div>
+    <div class="grid-header-row" id="gridHeaderRow" style="display:none;"></div>
     <div class="schedule-grid" id="scheduleGrid" style="display:none;"></div>
   </div>
 </div>
@@ -845,25 +858,34 @@ function renderGrid() {
   const grid = document.getElementById('scheduleGrid');
   const empty = document.getElementById('emptyState');
 
+  const headerRow = document.getElementById('gridHeaderRow');
+  
   if (!state.halls.length) {
     grid.style.display = 'none';
+    headerRow.style.display = 'none';
     empty.style.display = 'block';
     return;
   }
   empty.style.display = 'none';
   grid.style.display = 'grid';
+  headerRow.style.display = 'grid';
 
   const cols = state.halls.length;
   const slots = slotCount();
-  grid.style.gridTemplateColumns = `70px repeat(${cols}, minmax(140px, 1fr))`;
-  grid.style.gridTemplateRows = `auto repeat(${slots}, 28px)`;
+  const colTemplate = `70px repeat(${cols}, minmax(140px, 1fr))`;
+  grid.style.gridTemplateColumns = colTemplate;
+  grid.style.gridTemplateRows = `repeat(${slots}, 28px)`;
+  headerRow.style.gridTemplateColumns = colTemplate;
+
+  // Separate sticky header row
+  let headerHtml = '';
+  headerHtml += `<div class="grid-header time-header">Tijd</div>`;
+  state.halls.forEach(h => {
+    headerHtml += `<div class="grid-header">${h.name}${h.capacity ? `<div class="hall-capacity">${h.capacity} pers.${h.location ? ' · ' + h.location : ''}</div>` : ''}</div>`;
+  });
+  headerRow.innerHTML = headerHtml;
 
   let html = '';
-  // Header row
-  html += `<div class="grid-header time-header">Tijd</div>`;
-  state.halls.forEach(h => {
-    html += `<div class="grid-header">${h.name}${h.capacity ? `<div class="hall-capacity">${h.capacity} pers.${h.location ? ' · ' + h.location : ''}</div>` : ''}</div>`;
-  });
 
   // Time slots
   for (let i = 0; i < slots; i++) {
