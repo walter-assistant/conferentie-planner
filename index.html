@@ -341,7 +341,10 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 
 <!-- ═══════════════════════ HEADER ═══════════════════════ -->
 <div class="header">
-  <h1 style="cursor:pointer;" onclick="editConferenceName()" title="Klik om te bewerken">📅 <span id="headerTitle">Conferentie Planner</span></h1>
+  <h1 style="cursor:pointer;display:flex;align-items:center;gap:8px;" onclick="editConferenceName()" title="Klik om te bewerken">
+    📅 <span id="headerTitle">Conferentie Planner</span>
+    <span style="font-size:0.8rem;opacity:0.7;font-weight:400;">✏️</span>
+  </h1>
   <div class="header-actions">
     <button class="btn btn-outline" onclick="openHallModal()">🏛 Zalen</button>
     <button class="btn btn-outline" onclick="openSessionModal()">➕ Programma</button>
@@ -743,7 +746,16 @@ function renderProjectSelect() {
 
 function updateProjectUI() {
   document.getElementById('headerTitle').textContent = state.confName;
-  document.getElementById('projectStatus').textContent = `${state.sessions.length} onderdelen, ${state.halls.length} zalen`;
+  const placed = state.sessions.filter(s => s.hallId !== null && s.slotIndex !== null).length;
+  const unplaced = state.sessions.length - placed;
+  const dateInfo = state.dates.length > 1 ? `${state.dates.length} dagen` : formatDate(state.activeDate);
+  
+  let statusText = `${state.sessions.length} onderdelen`;
+  if (unplaced > 0) statusText += ` (${unplaced} ongeplaatst)`;
+  statusText += ` · ${state.halls.length} zalen · ${dateInfo}`;
+  
+  document.getElementById('projectStatus').textContent = statusText;
+  document.title = `${state.confName} - Conferentie Planner`;
 }
 
 function editConferenceName() {
@@ -899,6 +911,7 @@ function saveSession() {
   saveState();
   closeModal('sessionModalOverlay');
   renderAll();
+  updateProjectUI();
 }
 
 function deleteSession() {
@@ -911,6 +924,7 @@ function deleteSession() {
   saveState();
   closeModal('sessionModalOverlay');
   renderAll();
+  updateProjectUI();
   showToast(`"${session.name}" verwijderd`, true);
 }
 
@@ -1007,12 +1021,29 @@ function saveSettings() {
   const s = parseInt(document.getElementById('startHour').value);
   const e = parseInt(document.getElementById('endHour').value);
   if (e <= s) { alert('Eindtijd moet na starttijd liggen.'); return; }
+  
+  const newName = document.getElementById('confName').value.trim() || 'Conferentie';
+  const nameChanged = newName !== state.confName;
+  
   pushUndo('Instellingen gewijzigd');
   state.startHour = s;
   state.endHour = e;
-  state.confName = document.getElementById('confName').value.trim() || 'Conferentie';
+  state.confName = newName;
+  
+  // Update project index if name changed
+  if (nameChanged) {
+    const index = getProjectIndex();
+    const project = index.find(p => p.id === currentProjectId);
+    if (project) {
+      project.name = newName;
+      saveProjectIndex(index);
+    }
+    renderProjectSelect();
+  }
+  
   saveState();
   closeModal('settingsModalOverlay');
+  updateProjectUI();
   renderAll();
 }
 
