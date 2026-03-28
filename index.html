@@ -1493,10 +1493,40 @@ function renderGrid() {
   // Separate sticky header row
   let headerHtml = '';
   headerHtml += `<div class="grid-header time-header">Tijd</div>`;
-  state.halls.forEach(h => {
-    headerHtml += `<div class="grid-header">${h.name}${h.capacity ? `<div class="hall-capacity">${h.capacity} pers.${h.location ? ' · ' + h.location : ''}</div>` : ''}</div>`;
+  state.halls.forEach((h, idx) => {
+    headerHtml += `<div class="grid-header" draggable="true" data-hall-idx="${idx}" style="cursor:grab;" title="Sleep om volgorde te wijzigen">${h.name}${h.capacity ? `<div class="hall-capacity">${h.capacity} pers.${h.location ? ' · ' + h.location : ''}</div>` : ''}</div>`;
   });
   headerRow.innerHTML = headerHtml;
+
+  // Drag & drop on grid headers to reorder halls
+  let dragHallIdx = null;
+  headerRow.querySelectorAll('.grid-header[draggable]').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      dragHallIdx = parseInt(el.dataset.hallIdx);
+      el.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    el.addEventListener('dragend', e => { el.style.opacity = '1'; dragHallIdx = null; });
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      el.style.background = '#bbdefb';
+    });
+    el.addEventListener('dragleave', e => { el.style.background = ''; });
+    el.addEventListener('drop', e => {
+      e.preventDefault();
+      el.style.background = '';
+      const dropIdx = parseInt(el.dataset.hallIdx);
+      if (dragHallIdx !== null && dragHallIdx !== dropIdx) {
+        pushUndo('Zalen herschikt');
+        const moved = state.halls.splice(dragHallIdx, 1)[0];
+        state.halls.splice(dropIdx, 0, moved);
+        saveState();
+        renderAll();
+        showToast('Zalen herschikt');
+      }
+    });
+  });
 
   let html = '';
 
